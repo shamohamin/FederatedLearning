@@ -1,0 +1,5 @@
+
+ENV_NAME = "BreakoutNoFrameskip-v4"
+ITERATION = 10
+EPSILON = 0.5
+DISCOUNT_FACTOR = 0.9
