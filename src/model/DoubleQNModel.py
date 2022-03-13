@@ -21,13 +21,15 @@ from ..config import (
 
 
 class Agent:
-    def __init__(self, env, episodes, policy, maxMemorySize):
+    def __init__(self, env, episodes, policy, maxMemorySize, updateModelAfter=None):
         self.policy = policy
         self.episodes = episodes
         self.env = env
         self.input_shape = self.env.observation_space.shape  # input frame size
         self.output_shape = self.env.action_space.n  # actions count
         self.memorySize = maxMemorySize
+        self.updateModelAfter = 2 * \
+            UPDATE_TARGET_NETWOTK if updateModelAfter is None else updateModelAfter
 
     def updateParameters(self):
         raise NotImplementedError
@@ -41,9 +43,13 @@ class DoubleQNModel(Agent):
                  maxMemorySize=MINIMUM_EXPERIENCE_MEMORY,
                  lossFunction=keras.losses.Huber(),
                  optimizer=keras.optimizers.Adam(
-                     learning_rate=LRATE, clipnorm=1.0)
+                     learning_rate=LRATE, clipnorm=1.0),
+                 updateModelAfter=None,
+                 senderFunction=None, waitFunction=None,
+                 federatedLearning=True, terminateSignal=None,
+                 procName=None
                  ):
-        super().__init__(env, episodes, policy, maxMemorySize)
+        super().__init__(env, episodes, policy, maxMemorySize, updateModelAfter)
         self.targetModel = keras.models.clone_model(model)
         self.workerModel = keras.models.clone_model(model)
 
@@ -58,6 +64,12 @@ class DoubleQNModel(Agent):
             "reward_history": [],
             "history": []
         }
+
+        self.federatedLearning = federatedLearning
+        self.senderFunction = senderFunction
+        self.terminateSignal = terminateSignal
+        self.waitAndSaveModel = waitFunction
+        self.procName = procName
 
     def updateParameters(self):
         cond = self.data["frame_count"] % UPDATE_AFTER_ACTIONS and len(
@@ -130,9 +142,13 @@ class DoubleQNModel(Agent):
                     template = "running reward: {:.2f} at episode {}, frame count {}"
                     print(template.format(
                         self.data["running_reward"], episode, self.data["frame_count"]))
-
-                    self.saveStates()
-                    exit(1)
+                    
+                    if self.data["frame_count"] % self.updateModelAfter == 0:
+                        self.senderFunction(self.targetModel)
+                        self.waitAndSaveModel()
+                        
+                        self.saveStates()
+                    #exit(1)
 
                 if len(self.data["history"]) > self.memorySize:
                     # make room for new experience
@@ -163,12 +179,11 @@ class DoubleQNModel(Agent):
 
     def loadStates(self):
         import glob
-        
+
         self.workerModel.load_weights(sorted(list(glob.glob("*.h5")))[-1])
         self.targetModel.set_weights(self.targetModel.get_weights())
-        
+
         filename = sorted(list(glob.glob("*.pbz2")))[-1]
         data = bz2.BZ2File(filename, "rb")
         data = pickle.load(data)
         self.data = data
-        
