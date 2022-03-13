@@ -1,6 +1,7 @@
 from ..config import (
     EPSILON,
     EPSILON_GREEDY_FRAMES,
+    EPSILON_RANDOM_FRAMES,
     MIN_EPSILON
 )
 import numpy as np
@@ -23,13 +24,13 @@ class Policy:
 class EpsilonGreedyPolicy(Policy):
     def __init__(self, *args, **kwargs):
         super().__init__("epsilon_greedy", *args, **kwargs)
-        if len(args) <= 1:
+        if len(args) == 0:
             raise Exception(
                 "Please Pass ActionShapes And ObserveFrameCount."
             )
         
         self.actionCount = self.args[0]
-        self.observeFramesCount = self.args[1]
+        self.observeFramesCount = EPSILON_RANDOM_FRAMES
         
         self.epsilon_greedy_frames = self.kwargs.get(
             "epsilon_greedy_frames", EPSILON_GREEDY_FRAMES)
