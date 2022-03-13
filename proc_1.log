@@ -1,0 +1,15 @@
+root - INFO - proc_1 episode: 1 -> reward: 0.0, epsilon: 0.99997930
+tensorflow - WARNING - From /home/amin/Documents/FederatedLearning/env/lib/python3.6/site-packages/tensorflow/python/ops/math_grad.py:1220: add_dispatch_support.<locals>.wrapper (from tensorflow.python.ops.array_ops) is deprecated and will be removed in a future version.
+Instructions for updating:
+Use tf.where in 2.0, which has the same broadcast rule as np.where
+root - INFO - proc_1 episode: 2 -> reward: 0.0, epsilon: 0.99995860
+root - INFO - proc_1 episode: 3 -> reward: 0.0, epsilon: 0.99993970
+root - INFO - proc_1 episode: 4 -> reward: 0.0, epsilon: 0.99992080
+root - INFO - proc_1 episode: 5 -> reward: 0.0, epsilon: 0.99990190
+root - INFO - proc_1 episode: 6 -> reward: 0.0, epsilon: 0.99988120
+root - INFO - proc_1 episode: 7 -> reward: 0.0, epsilon: 0.99986050
+root - INFO - proc_1 episode: 8 -> reward: 1.0, epsilon: 0.99981280
+root - INFO - proc_1 episode: 9 -> reward: 3.0, epsilon: 0.99968050
+root - INFO - proc_1 episode: 10 -> reward: 0.0, epsilon: 0.99965980
+root - INFO - proc_1 episode: 11 -> reward: 1.0, epsilon: 0.99959500
+root - INFO - proc_1 episode: 12 -> reward: 0.0, epsilon: 0.99957610

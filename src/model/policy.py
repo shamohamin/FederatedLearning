@@ -2,7 +2,8 @@ from ..config import (
     EPSILON,
     EPSILON_GREEDY_FRAMES,
     EPSILON_RANDOM_FRAMES,
-    MIN_EPSILON
+    MIN_EPSILON,
+    MAX_EPSILON
 )
 import numpy as np
 import tensorflow as tf
@@ -36,7 +37,7 @@ class EpsilonGreedyPolicy(Policy):
             "epsilon_greedy_frames", EPSILON_GREEDY_FRAMES)
         self.epsilon = self.kwargs.get("epsilon", EPSILON)
         self.epsilon_min = self.kwargs.get("epsilon_min", MIN_EPSILON)
-        self.epsilon_max = self.kwargs.get("epsilon_max", MIN_EPSILON)
+        self.epsilon_max = self.kwargs.get("epsilon_max", MAX_EPSILON)
 
         self.epsilon_interval = (
             self.epsilon_max - self.epsilon_min
@@ -55,8 +56,9 @@ class EpsilonGreedyPolicy(Policy):
             # use prediction
             expandedState = np.expand_dims(currState, axis=0)
             tensorState = tf.convert_to_tensor(expandedState)
-            preds = model.predict(tensorState, training=False)
-            action = tf.argmax(preds).numpy()
+            preds = model(tensorState, training=False)
+            action = tf.argmax(preds[0]).numpy()
+
 
         return action
 

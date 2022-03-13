@@ -5,7 +5,7 @@ from datetime import datetime
 import bz2
 import pickle
 import random
-
+import logging
 from .policy import Policy
 
 from ..config import (
@@ -18,6 +18,8 @@ from ..config import (
     UPDATE_AFTER_ACTIONS,
     UPDATE_TARGET_NETWOTK
 )
+
+
 
 
 class Agent:
@@ -57,12 +59,24 @@ class DoubleQNModel(Agent):
         self.optimizer = optimizer
         self.startTime = datetime.now()
 
+        self.saver = tf.train.Checkpoint(
+             step=tf.Variable(1), optimizer=self.optimizer, net=self.targetModel
+        )
+        self.manager = tf.train.CheckpointManager(self.saver, f"./{procName}_tf_ckpts", max_to_keep=1)
+
+        logging.basicConfig(filename=f"{procName}.log", filemode='w', format='%(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+        
         self.data = {
             "frame_count": 0,
             "running_reward": 0,
             "episode_count": 0,
-            "reward_history": [],
-            "history": []
+            "epsilon": float(policy.epsilon),
+            "episode_reward_history": [],
+            "action_history": [],
+            "state_history": [],
+            "state_next_history": [],
+            "rewards_history": [],
+            "done_history": []
         }
 
         self.federatedLearning = federatedLearning
@@ -73,19 +87,25 @@ class DoubleQNModel(Agent):
 
     def updateParameters(self):
         cond = self.data["frame_count"] % UPDATE_AFTER_ACTIONS and len(
-            self.data["history"]) > BATCH_SIZE
+            self.data["done_history"]) > BATCH_SIZE
 
         if cond:
-            batch = random.sample(self.data["history"], k=BATCH_SIZE)
-            # batch = np.random.choice(np.array(self.data["history"]), size=BATCH_SIZE)
-
-            sampleState = np.array([sample[0] for sample in batch])
-            nextSampleState = np.array([sample[2] for sample in batch])
-            sampleRewards = np.array([sample[-1] for sample in batch])
-            sampleActions = np.array([sample[1] for sample in batch])
-            sampleDone = tf.convert_to_tensor(
-                [float(sample[-2]) for sample in batch]
+            indices = np.random.choice(np.arange(len(self.data["done_history"])), size=BATCH_SIZE).tolist()
+            #batch = random.sample(self.data["history"], k=BATCH_SIZE)
+            sampleState = np.array([self.data["state_history"][i] for i in indices])
+            #sampleState = np.array([sample[0] for sample in batch])
+            nextSampleState = np.array([self.data["state_next_history"][i] for i in indices])
+            #nextSampleState = np.array([sample[2] for sample in batch])
+            sampleRewards = np.array([self.data["rewards_history"][i] for i in indices])
+            #sampleRewards = np.array([sample[-1] for sample in batch])
+            sampleActions = np.array([self.data["action_history"][i] for i in indices])
+            #sampleActions = np.array([sample[1] for sample in batch])
+            sampleDone =  tf.convert_to_tensor(
+                [float(self.data["done_history"][i]) for i in indices]
             )
+            #sampleDone = tf.convert_to_tensor(
+            #    [float(sample[-2]) for sample in batch]
+            #)
 
             futureRewards = self.targetModel.predict(nextSampleState)
             updatedQValues = sampleRewards + DISCOUNT_FACTOR * tf.reduce_max(
@@ -107,74 +127,93 @@ class DoubleQNModel(Agent):
                 zip(gradians, self.workerModel.trainable_variables))
 
     def train(self):
+        try:
+            for episode in range(self.episodes):
+                state = np.array(self.env.reset())
+                episodeReward = 0
+                self.data["episode_count"] = episode + 1
 
-        for episode in range(self.episodes):
-            state = np.array(self.env.reset())
-            episodeReward = 0
-            self.data["episode_count"] = episode + 1
+                for _ in range(1, MAX_STEPS_PER_EPISODE):
+                    self.data["frame_count"] = self.data["frame_count"] + 1
 
-            for _ in range(1, MAX_STEPS_PER_EPISODE):
-                self.data["frame_count"] = self.data["frame_count"] + 1
+                    action = self.policy.getAction(
+                        state, self.workerModel, self.data["frame_count"])
+                    self.policy.updateDefaultParameters()
 
-                action = self.policy.getAction(
-                    state, self.workerModel, self.data["frame_count"])
-                self.policy.updateDefaultParameters()
+                    # perform action
+                    nextState, reward, done, _ = self.env.step(action)
+                    nextState = np.array(nextState)
 
-                # perform action
-                nextState, reward, done, _ = self.env.step(action)
-                nextState = np.array(nextState)
+                    episodeReward = episodeReward + reward
+                    # save state in the replyMemory
+                    self.data["action_history"].append(action)
+                    self.data["state_history"].append(state)
+                    self.data["state_next_history"].append(nextState)
+                    self.data["done_history"].append(done)
+                    self.data["rewards_history"].append(reward)
 
-                episodeReward = episodeReward + reward
-                # save state in the replyMemory
-                self.data["history"].append(
-                    (state, action, nextState, done, reward))
+                    state = nextState
 
-                state = nextState
+                    # train model after 4 frames and update target model
+                    # and
+                    # update target model after 100000 frames
+                    self.updateParameters()
 
-                # train model after 4 frames and update target model
-                # and
-                # update target model after 100000 frames
-                self.updateParameters()
-
-                if self.data["frame_count"] % UPDATE_TARGET_NETWOTK == 0:
-                    self.targetModel.set_weights(
-                        self.workerModel.get_weights())
-                    template = "running reward: {:.2f} at episode {}, frame count {}"
-                    print(template.format(
-                        self.data["running_reward"], episode, self.data["frame_count"]))
-                    
-                    if self.data["frame_count"] % self.updateModelAfter == 0:
-                        self.senderFunction(self.targetModel)
-                        self.waitAndSaveModel()
+                    if self.data["frame_count"] % UPDATE_TARGET_NETWOTK == 0:
+                        self.targetModel.set_weights(
+                            self.workerModel.get_weights())
+                        template = "running reward: {:.2f} at episode {}, frame count {}"
                         
-                        self.saveStates()
-                    #exit(1)
+                        print(template.format(
+                            self.data["running_reward"], episode, self.data["frame_count"]))
+                        
+                        if self.data["frame_count"] % self.updateModelAfter == 0:
+                            self.senderFunction(self.targetModel)
+                            self.waitAndSaveModel()
+                            
+                            #self.saveStates()
+                        
 
-                if len(self.data["history"]) > self.memorySize:
-                    # make room for new experience
-                    del self.data["history"][:1]
+                    if len(self.data["action_history"]) > self.memorySize:
+                        # make room for new experience
+                        del self.data["action_history"][:10]
+                        del self.data["state_history"][:10]
+                        del self.data["state_next_history"][:10]
+                        del self.data["done_history"][:10]
+                        del self.data["rewards_history"][:10]
 
-                if done:
+                    if done:
+                        break
+
+                self.data["rewards_history"].append(episodeReward)
+                if len(self.data["rewards_history"]) > 100:
+                    del self.data["rewards_history"][:1]
+
+                self.data["running_reward"] = np.mean(
+                    np.array(self.data["rewards_history"]))
+                
+                templateEpisode = "{} episode: {} -> reward: {}, epsilon: {:.8f}".format(
+                    self.procName, self.data["episode_count"], episodeReward, self.policy.epsilon
+                )
+                print(templateEpisode)
+                logging.info(templateEpisode)
+
+                if self.data["running_reward"] > 30:
                     break
-
-            self.data["reward_history"].append(episodeReward)
-            if len(self.data["reward_history"]) > 100:
-                del self.data["reward_history"][:1]
-
-            self.data["running_reward"] = np.mean(
-                np.array(self.data["reward_history"]))
-            print("episode: {} -> reward: {}".format(episode, episodeReward))
-
-            if self.data["running_reward"] > 30:
-                break
-
+        
+        except BaseException:
+            self.saveStates()
+            
     def saveStates(self):
         now = datetime.now()
         currTime = now.strftime("%y-%m-%d-%H-%M-%S")
 
-        self.targetModel.save_weights(f"{currTime}_model.h5")
+        self.saver.step.assign_add(1)
+        path = self.manager.save()
 
-        with bz2.BZ2File(f"{currTime}_data.pbz2", "w") as file:
+        #self.targetModel.save_weights(f"{currTime}_model.h5")
+
+        with bz2.BZ2File(f"{self.procName}_{currTime}_data.pbz2", "w") as file:
             pickle.dump(self.data, file)
 
     def loadStates(self):

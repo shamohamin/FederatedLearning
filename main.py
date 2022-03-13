@@ -9,28 +9,13 @@ from src.model.LayersWrapper import load_model
 import numpy as np
 from baselines.common.atari_wrappers  import make_atari, wrap_deepmind
 
+model = load_model()
 
-# model = load_model()
-
-# env = make_atari("BreakoutNoFrameskip-v4")
-# env = wrap_deepmind(env, frame_stack=True, scale=True)
-# policy = EpsilonGreedyPolicy(env.action_space.n)
-# agent  = DoubleQNModel(policy=policy, model=model, env=env)
-
-# agent.loadStates()
-# env = make_env()
-# env.reset()
-# n_actions = env.action_space.n
-# state_dim = env.observation_space.shape
-# agent = DQNAgent("ad", state_dim, n_actions)
-# agent.network.load_weights("./assets/dqn_model_atari_weights.h5")
-
-# model = load_model()
-# model.load_weights("./_model.h5")
-
-# model2 = load_model()
-# model2.load_weights("./assets/model_1.h5")
-
+env = make_atari("BreakoutNoFrameskip-v4")
+env = wrap_deepmind(env, frame_stack=True, scale=True)
+policy = EpsilonGreedyPolicy(env.action_space.n)
+agent  = DoubleQNModel(policy=policy, model=model, env=env, procName="proc_2")
+agent.train()
 
 
 # def test(agent, env, total_episodes=30):
@@ -63,15 +48,5 @@ from baselines.common.atari_wrappers  import make_atari, wrap_deepmind
 #     print('Run %d episodes'%(total_episodes))
 #     print('Mean:', np.mean(rewards))
 
-# # # epsilonGreedy = EpsilonGreedyModel()
-# # # epsilonGreedy.train(keras.optimizers.Adam(), keras.losses.Huber(), ["accuracy"])
 
 # test(agent, env)
-import glob
-import bz2
-import pickle
-
-filename = sorted(list(glob.glob("*.pbz2")))[-1]
-data = bz2.BZ2File(filename, "rb")
-data = pickle.load(data)
-print(data["epsilon"])
