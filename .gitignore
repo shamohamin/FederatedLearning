@@ -8,3 +8,4 @@ assets
 *.h5
 *.pbz2
 *ROMS*
+*ckpts
