@@ -6,6 +6,7 @@ import cv2
 from src.model.policy import EpsilonGreedyPolicy
 from src.model.DoubleQNModel import DoubleQNModel
 from src.model.LayersWrapper import load_model
+from src.client.RLClient import RLClinet
 import numpy as np
 from baselines.common.atari_wrappers  import make_atari, wrap_deepmind
 
@@ -14,8 +15,10 @@ model = load_model()
 env = make_atari("BreakoutNoFrameskip-v4")
 env = wrap_deepmind(env, frame_stack=True, scale=True)
 policy = EpsilonGreedyPolicy(env.action_space.n)
-agent  = DoubleQNModel(policy=policy, model=model, env=env, procName="proc_2")
-agent.train()
+#agent  = DoubleQNModel(policy=policy, model=model, env=env, procName="proc_2")
+client = RLClinet(policy=policy, model=model, env=env, procName="proc_2")
+client.run()
+#agent.train()
 
 
 # def test(agent, env, total_episodes=30):

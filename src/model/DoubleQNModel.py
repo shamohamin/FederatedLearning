@@ -6,6 +6,7 @@ import bz2
 import pickle
 import random
 import logging
+import copy
 from .policy import Policy
 
 from ..config import (
@@ -18,8 +19,6 @@ from ..config import (
     UPDATE_AFTER_ACTIONS,
     UPDATE_TARGET_NETWOTK
 )
-
-
 
 
 class Agent:
@@ -60,12 +59,14 @@ class DoubleQNModel(Agent):
         self.startTime = datetime.now()
 
         self.saver = tf.train.Checkpoint(
-             step=tf.Variable(1), optimizer=self.optimizer, net=self.targetModel
+            step=tf.Variable(1), optimizer=self.optimizer, net=self.targetModel
         )
-        self.manager = tf.train.CheckpointManager(self.saver, f"./{procName}_tf_ckpts", max_to_keep=1)
+        self.manager = tf.train.CheckpointManager(
+            self.saver, f"./{procName}_tf_ckpts", max_to_keep=1)
 
-        logging.basicConfig(filename=f"{procName}.log", filemode='w', format='%(name)s - %(levelname)s - %(message)s', level=logging.INFO)
-        
+        logging.basicConfig(filename=f"{procName}.log", filemode='w',
+                            format='%(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+
         self.data = {
             "frame_count": 0,
             "running_reward": 0,
@@ -90,22 +91,27 @@ class DoubleQNModel(Agent):
             self.data["done_history"]) > BATCH_SIZE
 
         if cond:
-            indices = np.random.choice(np.arange(len(self.data["done_history"])), size=BATCH_SIZE).tolist()
+            indices = np.random.choice(
+                np.arange(len(self.data["done_history"])), size=BATCH_SIZE).tolist()
             #batch = random.sample(self.data["history"], k=BATCH_SIZE)
-            sampleState = np.array([self.data["state_history"][i] for i in indices])
+            sampleState = np.array(
+                [self.data["state_history"][i] for i in indices])
             #sampleState = np.array([sample[0] for sample in batch])
-            nextSampleState = np.array([self.data["state_next_history"][i] for i in indices])
+            nextSampleState = np.array(
+                [self.data["state_next_history"][i] for i in indices])
             #nextSampleState = np.array([sample[2] for sample in batch])
-            sampleRewards = np.array([self.data["rewards_history"][i] for i in indices])
+            sampleRewards = np.array(
+                [self.data["rewards_history"][i] for i in indices])
             #sampleRewards = np.array([sample[-1] for sample in batch])
-            sampleActions = np.array([self.data["action_history"][i] for i in indices])
+            sampleActions = np.array(
+                [self.data["action_history"][i] for i in indices])
             #sampleActions = np.array([sample[1] for sample in batch])
-            sampleDone =  tf.convert_to_tensor(
+            sampleDone = tf.convert_to_tensor(
                 [float(self.data["done_history"][i]) for i in indices]
             )
-            #sampleDone = tf.convert_to_tensor(
+            # sampleDone = tf.convert_to_tensor(
             #    [float(sample[-2]) for sample in batch]
-            #)
+            # )
 
             futureRewards = self.targetModel.predict(nextSampleState)
             updatedQValues = sampleRewards + DISCOUNT_FACTOR * tf.reduce_max(
@@ -163,16 +169,16 @@ class DoubleQNModel(Agent):
                         self.targetModel.set_weights(
                             self.workerModel.get_weights())
                         template = "running reward: {:.2f} at episode {}, frame count {}"
-                        
+
                         print(template.format(
                             self.data["running_reward"], episode, self.data["frame_count"]))
-                        
+
                         if self.data["frame_count"] % self.updateModelAfter == 0:
-                            self.senderFunction(self.targetModel)
+                            self.senderFunction(
+                                self.targetModel, self.evaluate())
                             self.waitAndSaveModel()
-                            
-                            #self.saveStates()
-                        
+
+                            # self.saveStates()
 
                     if len(self.data["action_history"]) > self.memorySize:
                         # make room for new experience
@@ -191,7 +197,7 @@ class DoubleQNModel(Agent):
 
                 self.data["running_reward"] = np.mean(
                     np.array(self.data["rewards_history"]))
-                
+
                 templateEpisode = "{} episode: {} -> reward: {}, epsilon: {:.8f}".format(
                     self.procName, self.data["episode_count"], episodeReward, self.policy.epsilon
                 )
@@ -200,10 +206,10 @@ class DoubleQNModel(Agent):
 
                 if self.data["running_reward"] > 30:
                     break
-        
+
         except BaseException:
             self.saveStates()
-            
+
     def saveStates(self):
         now = datetime.now()
         currTime = now.strftime("%y-%m-%d-%H-%M-%S")
@@ -211,10 +217,30 @@ class DoubleQNModel(Agent):
         self.saver.step.assign_add(1)
         path = self.manager.save()
 
-        #self.targetModel.save_weights(f"{currTime}_model.h5")
+        # self.targetModel.save_weights(f"{currTime}_model.h5")
 
         with bz2.BZ2File(f"{self.procName}_{currTime}_data.pbz2", "w") as file:
             pickle.dump(self.data, file)
+
+    def evaluate(self, episodes=3):
+
+        rewards = []
+        for _ in range(episodes):
+            done = False
+            episodeReward = 0
+            state = np.array(self.env.reset())
+
+            while not done:
+                action = np.argmax(self.targetModel(np.expand_dims(
+                    state, axis=0), training=False)[0]).numpy()
+                new_state, reward, done = self.env.step(action)
+                
+                episodeReward += reward
+                state = np.array(new_state)
+
+            rewards.append(episodeReward)
+
+        return sum(rewards) / len(rewards)
 
     def loadStates(self):
         import glob
