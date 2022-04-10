@@ -19,12 +19,10 @@ MAX_EPSILON = 1.0
 EPSILON_GREEDY_FRAMES = 1000000.0
 
 # update target model after 
-UPDATE_TARGET_NETWOTK = 50
+UPDATE_TARGET_NETWOTK = 20
 
 # train worker model after 
 UPDATE_AFTER_ACTIONS = 4
 
 # HOST configuration
-HOST = "tcp://2.tcp.ngrok.io"
-PORT = 15948
-CLIENT_NUMBERS = 2
+HOST = "http://127.0.0.1:5000/"

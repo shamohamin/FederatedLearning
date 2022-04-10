@@ -176,7 +176,9 @@ class DoubleQNModel(Agent):
                         if self.data["frame_count"] % self.updateModelAfter == 0:
                             self.senderFunction(
                                 self.targetModel, self.evaluate())
-                            self.waitAndSaveModel()
+                            weights = self.waitAndSaveModel()
+                            self.targetModel.set_weights(weights)
+                            self.workerModel.set_weights(weights)
 
                             # self.saveStates()
 
@@ -207,8 +209,8 @@ class DoubleQNModel(Agent):
                 if self.data["running_reward"] > 30:
                     break
 
-        except BaseException:
-            self.saveStates()
+        except BaseException as ex:
+            print("error", ex.args[0])
 
     def saveStates(self):
         now = datetime.now()
@@ -223,23 +225,21 @@ class DoubleQNModel(Agent):
             pickle.dump(self.data, file)
 
     def evaluate(self, episodes=3):
-
         rewards = []
         for _ in range(episodes):
             done = False
             episodeReward = 0
             state = np.array(self.env.reset())
-
+            
             while not done:
-                action = np.argmax(self.targetModel(np.expand_dims(
-                    state, axis=0), training=False)[0]).numpy()
-                new_state, reward, done = self.env.step(action)
-                
+                pred = self.targetModel(np.expand_dims(state, axis=0), training=False)    
+                action = np.argmax(pred[0])
+                new_state, reward, done, _ = self.env.step(action)
                 episodeReward += reward
                 state = np.array(new_state)
 
             rewards.append(episodeReward)
-
+        
         return sum(rewards) / len(rewards)
 
     def loadStates(self):

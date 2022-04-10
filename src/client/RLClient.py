@@ -1,12 +1,11 @@
 from ..model.DoubleQNModel import DoubleQNModel
-from ..config import EPISODES, HOST, MINIMUM_EXPERIENCE_MEMORY, LRATE, PORT
+from ..config import EPISODES, HOST, MINIMUM_EXPERIENCE_MEMORY, LRATE
 
 from multiprocessing import Process, Event
 from tensorflow import keras
-from io import BytesIO
-import socket
 import pickle
 import requests as re
+import time
 
 
 class RLClinet(Process):
@@ -18,7 +17,7 @@ class RLClinet(Process):
                  optimizer=keras.optimizers.Adam(
                      learning_rate=LRATE, clipnorm=1),
                  lossFunction=keras.losses.Huber(),
-                 host=HOST, port=PORT):
+                 host=HOST):
 
         self.terminateSignal = Event()
 
@@ -34,12 +33,10 @@ class RLClinet(Process):
         )
 
         self.serverHost = host
-        self.serverPort = port
         self.sock = None
 
     def senderFunction(self, model, score):
         print("start sending model.")
-        print(score)
         modelBytes = pickle.dumps(
             {
                 "proc_name": self.agent.procName,
@@ -47,14 +44,21 @@ class RLClinet(Process):
                 "score": score
             }
         )
-        res = re.post("http://127.0.0.1:5000/get_weights", modelBytes)
+        res = re.post(HOST + "get_weights", modelBytes)
         print(res.json())
         print("sending model completed.")
 
     def recieveAndSave(self):
         print("start getting model")
-        exit(1)
+        while True:
+            res = re.get(HOST + "get_glob_model", params={"proc_name": self.agent.procName})
+            if res.status_code == 400:
+                time.sleep(1)
+            elif res.status_code == 200:
+                print(len(res.content))
+                data = pickle.loads(res.content)
+                print("weights successfully received.")
+                return data["weights"]                
 
     def run(self):
-
         self.agent.train()
