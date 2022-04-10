@@ -8,7 +8,7 @@ model = load_model()
 env = make_atari("BreakoutNoFrameskip-v4")
 env = wrap_deepmind(env, frame_stack=True, scale=True)
 policy = EpsilonGreedyPolicy(env.action_space.n)
-client = RLClinet(policy=policy, model=model, env=env, procName="proc_1")
+client = RLClinet(policy=policy, model=model, env=env, procName="proc_3")
 client.run()
 #agent.train()
 

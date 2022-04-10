@@ -71,6 +71,7 @@ class DoubleQNModel(Agent):
             "frame_count": 0,
             "running_reward": 0,
             "episode_count": 0,
+            "score": 0,
             "epsilon": float(policy.epsilon),
             "episode_reward_history": [],
             "action_history": [],
@@ -180,6 +181,8 @@ class DoubleQNModel(Agent):
                             self.targetModel.set_weights(weights)
                             self.workerModel.set_weights(weights)
 
+                            #if self.data["episode_count"] % 500 == 0:
+                            self.saveStates()
                             # self.saveStates()
 
                     if len(self.data["action_history"]) > self.memorySize:
@@ -220,10 +223,12 @@ class DoubleQNModel(Agent):
         path = self.manager.save()
 
         # self.targetModel.save_weights(f"{currTime}_model.h5")
-
-        with bz2.BZ2File(f"{self.procName}_{currTime}_data.pbz2", "w") as file:
+        episode = self.data["episode_count"]
+        with bz2.BZ2File(f"{self.procName}_{currTime}_{episode}_data.pbz2", "w") as file:
             pickle.dump(self.data, file)
 
+        print("save completed")
+        
     def evaluate(self, episodes=3):
         rewards = []
         for _ in range(episodes):
@@ -239,8 +244,9 @@ class DoubleQNModel(Agent):
                 state = np.array(new_state)
 
             rewards.append(episodeReward)
-        
-        return sum(rewards) / len(rewards)
+        self.data["score"] = sum(rewards) / len(rewards)
+    
+        return self.data["score"]
 
     def loadStates(self):
         import glob
