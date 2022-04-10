@@ -8,6 +8,7 @@ import random
 import logging
 import copy
 from .policy import Policy
+import gc
 
 from ..config import (
     BATCH_SIZE,
@@ -170,7 +171,10 @@ class DoubleQNModel(Agent):
                         self.targetModel.set_weights(
                             self.workerModel.get_weights())
                         template = "running reward: {:.2f} at episode {}, frame count {}"
-
+                    
+                        logging.info(template.format(
+                            self.data["running_reward"], episode, self.data["frame_count"]))
+                    
                         print(template.format(
                             self.data["running_reward"], episode, self.data["frame_count"]))
 
@@ -182,7 +186,8 @@ class DoubleQNModel(Agent):
                             self.workerModel.set_weights(weights)
 
                             #if self.data["episode_count"] % 500 == 0:
-                            self.saveStates()
+                            if self.data["episode_count"] % 2000 == 0:
+                                self.saveStates()
                             # self.saveStates()
 
                     if len(self.data["action_history"]) > self.memorySize:
@@ -196,12 +201,12 @@ class DoubleQNModel(Agent):
                     if done:
                         break
 
-                self.data["rewards_history"].append(episodeReward)
-                if len(self.data["rewards_history"]) > 100:
-                    del self.data["rewards_history"][:1]
+                self.data["episode_reward_history"].append(episodeReward)
+                if len(self.data["episode_reward_history"]) > 100:
+                    del self.data["episode_reward_history"][:1]
 
                 self.data["running_reward"] = np.mean(
-                    np.array(self.data["rewards_history"]))
+                    np.array(self.data["episode_reward_history"]))
 
                 templateEpisode = "{} episode: {} -> reward: {}, epsilon: {:.8f}".format(
                     self.procName, self.data["episode_count"], episodeReward, self.policy.epsilon
@@ -251,10 +256,17 @@ class DoubleQNModel(Agent):
     def loadStates(self):
         import glob
 
-        self.workerModel.load_weights(sorted(list(glob.glob("*.h5")))[-1])
-        self.targetModel.set_weights(self.targetModel.get_weights())
+        self.saver.restore(self.manager.latest_checkpoint)
+        
+        if self.manager.latest_checkpoint:
+            print("restored from {}".format(self.manager.latest_checkpoint))
+        else:
+            print("initialization from scrath")
 
-        filename = sorted(list(glob.glob("*.pbz2")))[-1]
+        filename = sorted(list(glob.glob("{self.procName}*.pbz2")))[-1]
+        print(filename)
         data = bz2.BZ2File(filename, "rb")
         data = pickle.load(data)
         self.data = data
+        
+        gc.collect()

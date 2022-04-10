@@ -19,7 +19,7 @@ MAX_EPSILON = 1.0
 EPSILON_GREEDY_FRAMES = 1000000.0
 
 # update target model after 
-UPDATE_TARGET_NETWOTK = 5000
+UPDATE_TARGET_NETWOTK = 50
 
 # train worker model after 
 UPDATE_AFTER_ACTIONS = 4
