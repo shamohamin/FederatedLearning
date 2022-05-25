@@ -9,6 +9,7 @@ import logging
 import copy
 from .policy import Policy
 import gc
+import sys
 
 from ..config import (
     BATCH_SIZE,
@@ -121,7 +122,6 @@ class DoubleQNModel(Agent):
             )
 
             updatedQValues = updatedQValues * (1 - sampleDone) - sampleDone
-
             masks = tf.one_hot(sampleActions, self.output_shape)
 
             with tf.GradientTape() as tape:
@@ -133,10 +133,13 @@ class DoubleQNModel(Agent):
                 loss, self.workerModel.trainable_variables)
             self.optimizer.apply_gradients(
                 zip(gradians, self.workerModel.trainable_variables))
+            
+            del sampleState, nextSampleState, sampleRewards, sampleActions, sampleDone, indices
 
     def train(self):
         try:
-            for episode in range(self.episodes):
+            d = self.data["episode_count"]
+            for episode in range(d, self.episodes):
                 state = np.array(self.env.reset())
                 episodeReward = 0
                 self.data["episode_count"] = episode + 1
@@ -166,8 +169,9 @@ class DoubleQNModel(Agent):
                     # and
                     # update target model after 100000 frames
                     self.updateParameters()
-
+                    gc.collect()
                     if self.data["frame_count"] % UPDATE_TARGET_NETWOTK == 0:
+                        self.data["epsilon"] = self.policy.epsilon
                         self.targetModel.set_weights(
                             self.workerModel.get_weights())
                         template = "running reward: {:.2f} at episode {}, frame count {}"
@@ -186,8 +190,6 @@ class DoubleQNModel(Agent):
                             self.workerModel.set_weights(weights)
 
                             #if self.data["episode_count"] % 500 == 0:
-                            if self.data["episode_count"] % 2000 == 0:
-                                self.saveStates()
                             # self.saveStates()
 
                     if len(self.data["action_history"]) > self.memorySize:
@@ -213,7 +215,12 @@ class DoubleQNModel(Agent):
                 )
                 print(templateEpisode)
                 logging.info(templateEpisode)
-
+                
+                if self.data["episode_count"] % 2000 == 0:
+                    self.saveStates()
+                
+                gc.collect()
+                
                 if self.data["running_reward"] > 30:
                     break
 
@@ -263,10 +270,11 @@ class DoubleQNModel(Agent):
         else:
             print("initialization from scrath")
 
-        filename = sorted(list(glob.glob("{self.procName}*.pbz2")))[-1]
-        print(filename)
-        data = bz2.BZ2File(filename, "rb")
-        data = pickle.load(data)
-        self.data = data
+        # filename = sorted(list(glob.glob("{self.procName}*.pbz2")))[-1]
+        # print(filename)
+        # data = bz2.BZ2File(filename, "rb")
+        # data = pickle.load(data)
+        # self.data = data
+        # self.policy.epsilon = data["epsilon"]
         
         gc.collect()

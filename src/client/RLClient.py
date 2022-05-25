@@ -45,7 +45,6 @@ class RLClinet(Process):
             }
         )
         res = re.post(HOST + "get_weights", modelBytes)
-        print(res.json())
         print("sending model completed.")
 
     def recieveAndSave(self):
